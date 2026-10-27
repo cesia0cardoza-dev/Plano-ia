@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlanoAI - Digitalizador de Planos CAD</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .grid-bg {
+            background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex justify-between items-center shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="bg-blue-600 p-2 rounded-xl text-white font-bold text-xl">📐</div>
+            <div>
+                <h1 class="text-lg font-bold text-white tracking-wide">PlanoAI Studio</h1>
+                <p class="text-xs text-slate-400">De Boceto a CAD Editable</p>
+            </div>
+        </div>
+        <div class="flex space-x-2">
+            <button onclick="exportDXF()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center shadow">
+                💾 Exportar DXF
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 flex flex-col md:flex-row p-4 gap-4 max-w-7xl mx-auto w-full">
+        
+        <!-- Panel Izquierdo: Controles y Herramientas -->
+        <aside class="w-full md:w-80 bg-slate-800 border border-slate-700 rounded-2xl p-5 flex flex-col gap-6 shadow-xl">
+            
+            <!-- Paso 1: Carga -->
+            <div>
+                <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">1. Imagen de Origen</h2>
+                <label class="border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer bg-slate-900/50 transition">
+                    <span class="text-2xl mb-1">📷</span>
+                    <span class="text-xs text-slate-300 font-medium">Subir foto o usar muestra</span>
+                    <input type="file" id="uploadImage" accept="image/*" class="hidden" onchange="loadSampleImage(event)">
+                </label>
+            </div>
+
+            <!-- Paso 2: Procesamiento IA -->
+            <div>
+                <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">2. Vectorización IA</h2>
+                <button onclick="runAITracing()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-sm font-semibold transition shadow flex items-center justify-center gap-2">
+                    ✨ Convertir a Vectores
+                </button>
+            </div>
+
+            <!-- Gestión de Capas CAD -->
+            <div class="border-t border-slate-700 pt-4">
+                <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Capas CAD</h2>
+                <div class="space-y-2 text-sm">
+                    <label class="flex items-center justify-between bg-slate-900/40 p-2 rounded-lg cursor-pointer">
+                        <span class="text-slate-300">🧱 Muros Principales</span>
+                        <input type="checkbox" checked onchange="toggleLayer('walls', this.checked)" class="accent-blue-600">
+                    </label>
+                    <label class="flex items-center justify-between bg-slate-900/40 p-2 rounded-lg cursor-pointer">
+                        <span class="text-slate-300">📏 Cotas y Medidas</span>
+                        <input type="checkbox" checked onchange="toggleLayer('dimensions', this.checked)" class="accent-blue-600">
+                    </label>
+                    <label class="flex items-center justify-between bg-slate-900/40 p-2 rounded-lg cursor-pointer">
+                        <span class="text-slate-300">🌿 Curvas / Terreno</span>
+                        <input type="checkbox" checked onchange="toggleLayer('terrain', this.checked)" class="accent-blue-600">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Control de Opacidad / Comparación -->
+            <div class="border-t border-slate-700 pt-4">
+                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                    <span>Transparencia Foto Fondo</span>
+                    <span id="opacityVal">30%</span>
+                </div>
+                <input type="range" min="0" max="100" value="30" class="w-full accent-blue-600 cursor-pointer" oninput="updateOpacity(this.value)">
+            </div>
+        </aside>
+
+        <!-- Panel Derecho: Lienzo Interactivo CAD -->
+        <section class="flex-1 bg-slate-800 border border-slate-700 rounded-2xl relative overflow-hidden flex items-center justify-center shadow-xl grid-bg min-h-[450px]">
+            
+            <!-- Lienzo SVG interactivo -->
+            <svg id="cadCanvas" viewBox="0 0 800 600" class="w-full h-full absolute inset-0 cursor-crosshair">
+                <!-- Imagen de fondo (Boceto) -->
+                <image id="bgImage" href="https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&w=800&q=80" x="0" y="0" width="800" height="600" opacity="0.3" preserveAspectRatio="none"/>
+
+                <!-- Grupo de Terreno / Curvas -->
+                <g id="layer-terrain" stroke="#10b981" stroke-width="1.5" fill="none" stroke-dasharray="4">
+                    <path d="M 120 180 Q 250 220 400 190 T 700 230" />
+                    <path d="M 100 240 Q 300 280 450 240 T 720 290" />
+                </g>
+
+                <!-- Grupo de Muros -->
+                <g id="layer-walls" stroke="#60a5fa" stroke-width="4" fill="rgba(96, 165, 250, 0.1)">
+                    <polygon points="150,120 650,120 680,480 200,520 150,300" />
+                    <line x1="200" y1="350" x2="550" y2="350" stroke-width="3" />
+                </g>
+
+                <!-- Grupo de Cotas y Textos -->
+                <g id="layer-dimensions" fill="#f8fafc" font-family="monospace" font-size="14">
+                    <!-- Cotas horizontales y verticales -->
+                    <text x="380" y="110" fill="#f43f5e" font-weight="bold">11.40 m</text>
+                    <text x="410" y="340" fill="#f43f5e" font-weight="bold">12.40 m</text>
+                    <text x="110" y="220" fill="#f43f5e" font-weight="bold">8.00 m</text>
+                    <text x="350" y="540" fill="#f43f5e" font-weight="bold">NPT = 0+0.00</text>
+
+                    <!-- Nodos interactivos de control CAD -->
+                    <circle cx="150" cy="120" r="6" fill="#3b82f6" class="cursor-pointer" onclick="selectNode(this)" />
+                    <circle cx="650" cy="120" r="6" fill="#3b82f6" class="cursor-pointer" onclick="selectNode(this)" />
+                    <circle cx="680" cy="480" r="6" fill="#3b82f6" class="cursor-pointer" onclick="selectNode(this)" />
+                    <circle cx="200" cy="520" r="6" fill="#3b82f6" class="cursor-pointer" onclick="selectNode(this)" />
+                </g>
+            </svg>
+
+            <!-- Barra flotante de estado en el lienzo -->
+            <div class="absolute bottom-4 left-4 bg-slate-900/80 backdrop-blur border border-slate-700 px-3 py-1.5 rounded-lg text-xs text-slate-300 flex items-center gap-2 shadow">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Modo de Edición Activa (Vectorial)</span>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        function loadSampleImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('bgImage').setAttribute('href', e.target.result);
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function runAITracing() {
+            alert('🤖 IA Analizando imagen...\n- Líneas de muros detectadas.\n- Extrayendo cotas mediante OCR...\n- Generando topología vectorial completada.');
+        }
+
+        function toggleLayer(layerName, show) {
+            const layer = document.getElementById(`layer-${layerName}`);
+            if (layer) {
+                layer.style.display = show ? 'inline' : 'none';
+            }
+        }
+
+        function updateOpacity(val) {
+            document.getElementById('bgImage').setAttribute('opacity', val / 100);
+            document.getElementById('opacityVal').innerText = val + '%';
+        }
+
+        function selectNode(node) {
+            const isSelected = node.getAttribute('fill') === '#ef4444';
+            node.setAttribute('fill', isSelected ? '#3b82f6' : '#ef4444');
+        }
+
+        function exportDXF() {
+            const dxfContent = `0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\nLINE\n8\nMUROS\n10\n150.0\n20\n120.0\n30\n0.0\n11\n650.0\n21\n120.0\n31\n0.0\n0\nENDSEC\n0\nEOF`;
+            const blob = new Blob([dxfContent], { type: 'application/dxf' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'plano_digitalizado.dxf';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

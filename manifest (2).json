@@ -1,0 +1,12 @@
+{
+  "background_color": "#ffffff",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Planos HPA",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "Planos HPA",
+  "start_url": "/",
+  "theme_color": "#ffffff",
+  "description": "Aplicacion digitalizacion de planos"
+}
